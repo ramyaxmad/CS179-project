@@ -12,10 +12,40 @@ interface BackendResult {
   minutes: number;
 }
 
+function buildMoveList(eachStep: [number,number][]) {
+  const moves: {from: [number, number], to: [number,number] }[] = [];
+
+  for (let i = 0; i < eachStep.length - 1; i++) {
+    moves.push({
+      from: eachStep[i], to: eachStep[i+1]
+    });
+  }
+  return moves;
+}
+
+function buildGridStates(states: number[][][], moves: any[]) {
+  const ui: {grid: number[][], from: [number, number], to: [number, number]}[] = [];
+
+  for (let i = 0; i < moves.length; i++) {
+    const stateIndex = Math.floor(i / 2);
+    const grid = states[stateIndex];
+    ui.push({
+      grid, from: moves[i].from, to: moves[i].to
+    });
+  }
+  return ui;
+}
+
 function App() {
   const [screen, setScreen] = useState<"upload" | "loading" | "summary" | "step" | "done">("upload");
   const [data, setData] = useState<BackendResult | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
+  const [fileName, setFileName] = useState<string>("");
+  const [moves, setMoves] = useState<
+    {from: [number, number]; to: [number, number]}[]
+  >([]);
+  const [uiStates, setUIStates] = useState<any[]>([]);
+
 
   useEffect(() => {
 
@@ -24,52 +54,45 @@ function App() {
       if (e.key !== "Enter") return;
       
       if (screen === "summary") {
-        if (data && data.moves === 0) {
+        if (moves.length === 0) {
           setScreen("done");
-        } else {
-          setStepIndex(0);
-          setScreen("step");
+          return;
         }
-      } else if (screen === "step") {
-        if (!data) return;
+        setStepIndex(0);
+        setScreen("step");
+        return;
+      }
 
-        if (stepIndex < data.states.length - 1) {
-          setStepIndex(stepIndex + 1);
-        } else {
-          setScreen("done");
-        }
-      } else if (screen === "done") {
-        //restart back to upload 
+      if (screen === "step") {
+        setStepIndex(prev => {
+          if (prev + 1 >= uiStates.length) {
+            setScreen("done");
+            return prev;
+          }
+          return prev + 1;
+        });
+        return;
+      }
+
+      if (screen === "done") {
         setData(null);
+        setMoves([]);
+        setUIStates([]);
         setStepIndex(0);
         setScreen("upload");
+        return;
       }
     }
 
     window.addEventListener("keydown", onEnter);
     return () => window.removeEventListener("keydown", onEnter);
-  }, [screen, stepIndex, data]);
+  }, [screen, uiStates.length]);
 
-  // UPLOAD AND CALL THE BACKEND 
-  // async function uploadManifest(file: File) {
-  //   setScreen("loading");
-    
-  //   const formData = new FormData();
-  //   formData.append("file", file);
-
-  //   const res = await fetch("http://localhost:8000/solve", {
-  //     method: "POST",
-  //     body: formData,
-  //   });
-
-  //   const result = (await res.json()) as BackendResult;
-  //   setData(result);
-  //   setScreen("summary");
-  // }
 
   async function uploadManifest(file: File) {
   try {
     setScreen("loading");
+    setFileName(file.name.replace(".txt", ""));
 
     const formData = new FormData();
     formData.append("file", file);
@@ -91,6 +114,11 @@ function App() {
     console.log("Parsed backend JSON:", result);
 
     setData(result);
+    const builtMoves = buildMoveList(result.steps);
+    const ui = buildGridStates(result.states, builtMoves);
+
+    setMoves(builtMoves);
+    setUIStates(ui);
     setScreen("summary");
 
   } catch (err) {
@@ -100,56 +128,17 @@ function App() {
   }
 }
 
-
-//   async function uploadManifest(file: File) {
-//   try {
-//     setScreen("loading");
-
-//     const formData = new FormData();
-//     formData.append("file", file);
-
-//     const res = await fetch("http://localhost:8000/solve", {
-//       method: "POST",
-//       body: formData,
-//     });
-
-//     if (!res.ok) {
-//       const text = await res.text();
-//       console.error("Backend error:", res.status, text);
-//       alert(`Backend error ${res.status}: ${text}`);
-//       setScreen("upload");
-//       return;
-//     }
-
-//     const result = (await res.json()) as BackendResult;
-//     console.log("Backend result:", result);
-
-//     setData(result);
-//     setScreen("summary");
-//   } catch (err) {
-//     console.error("Fetch failed:", err);
-//     alert("Could not reach backend. Is uvicorn running on http://localhost:8000?");
-//     setScreen("upload");
-//   }
-// }
-
-
   // computer the moveSource and moveDest 
   // take the coordinate list and show source/dest for the state after the move 
 
   function getMoveData() {
-    if (!data) return { moveSource: null, moveDest: null };
+    if (moves.length === 0) return {moveSource: null, moveDest: null};
+    if (stepIndex >= moves.length) return {moveSource: null, moveDest: null};
 
-    //no color on first grid 
-    if (stepIndex === 0) return { moveSource: null, moveDest: null };
-
-    //each move uses 2 entries [from, to]
-    //stateIndex = moveIndex + 1
-    const moveIndex = stepIndex - 1;
-    const moveSource = data.steps[moveIndex * 2] || null;
-    const moveDest = data.steps[moveIndex * 2 + 1] || null;
-
-    return { moveSource, moveDest };
+    return {
+      moveSource: moves[stepIndex].from,
+      moveDest: moves[stepIndex].to
+    };
   }
 
   const { moveSource, moveDest } = getMoveData();
@@ -181,7 +170,7 @@ function App() {
       {screen === "summary" && data && (
         <>
           <h2>Solution has been found!</h2>
-          <p>___ has {data.containers.length - 2} containers</p>
+          <p>{fileName} has {data.containers.length - 2} containers</p>
           <p>{data.moves} moves</p>
           <p>{data.minutes} minutes</p>
           <p>Hit ENTER when ready for first move</p>
@@ -193,38 +182,35 @@ function App() {
       {/* STEP THROUGH THE MOVES */}
       {screen === "step" && data && (
         <>
-          <h2>Move {stepIndex} of {data.states.length - 1}:</h2>
+          <h2>Move {stepIndex + 1} of {uiStates.length}:</h2> {/*changed moves.length to  */}
 
           {/* show the grid with moveSource and moveDest */}
           {moveSource && moveDest && (
-            <>
-              <p style={{fontsize: "18px"}}>
-                <span style={{color: "black"}}>
-                  {stepIndex} of {data.states.length - 1}:
-                </span>
-                {" "}
-                <span style={{color: "red"}}>Move from {`[${moveSource[0]}, ${moveSource[1]}]`}</span>
-                {" "}
-                <span style={{color: "green"}}>to {`[${moveDest[0]}, ${moveDest[1]}]`} </span>
-              </p>
-            </>
+            <p style={{fontSize: "20px"}}>
+              <span style = {{fontWeight: "bold"}}> 
+                {stepIndex + 1} of {moves.length}:
+              </span>
+              {" "}
+              Move from [{moveSource[0]}, {moveSource[1]} to {moveDest[0]}, {moveDest[1]}]
+            </p>
           )
           }
-
-          <CargoGrid
-            grid = {data.states[stepIndex]}
-            containers={data.containers}
-            moveSource={moveSource}
-            moveDest={moveDest}
-          />
           <p>Hit ENTER when done</p>
+          {screen === "step" && uiStates[stepIndex] && (
+            <CargoGrid
+              containers={data.containers}
+              grid={uiStates[stepIndex].grid}
+              moveSource={uiStates[stepIndex].from}
+              moveDest={uiStates[stepIndex].to}
+            />
+          )}
         </>
       )}
 
       {/* DONE SCREEN*/}
       {screen === "done" && (
         <>
-          <h2>I have written an updated manifest to the desktop as ___.txt</h2>
+          <h2>I have written an updated manifest to the desktop as {fileName}OUTBOUND.txt</h2>
           <p>Don't forget to email it to the captain.</p>
           <p>Hit ENTER when done</p>
         </>

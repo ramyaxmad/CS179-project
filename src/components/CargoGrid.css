@@ -1,21 +1,3 @@
-/* .grid-container {
-    display: grid;
-    grid-template-columns: repeat(12, 60px);
-    grid-template-rows: repeat(8, 60px);
-    /*gap: 4px;
-    background-color: #f0f0f0;
-    /*padding: 10px;
-    width: fit-content;
-    /* border-radius: 8px;
-}
-
-.cell {
-    background: white;
-    border: 1px solid #888;
-    width: 60px;
-    height: 60px;
-} */
-
 .cargo-grid {
   margin-top: 20px;
 }

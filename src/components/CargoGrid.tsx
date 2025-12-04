@@ -22,31 +22,53 @@ export default function CargoGrid(
 
 
     return (
-        <div>
-            {/* crane park square */}
-            <div>
-                <div style = {{
-                    width: "45px",
-                    height: "45px",
-                    backgroundColor: "#ffff",
-                    border: "2px solid black",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginBottom: "5px"
-                }}>
-                    Park
-                </div>
+        <div> 
+            {/*column numbers */}
+            <div style={{
+                display: "grid",
+                gridTemplateColumns: `60px repeat(${cols}, 60px)`,
+                marginBottom: "5px",
+                fontWeight: "bold",
+                textAlign: "center"
+            }}>
+                 <div></div>
+                {Array.from({length: cols}, (_,i) => (
+                    <div key = {i}> {i+1}</div>
+                ))}
             </div>
+
+
+            <div style={{display: "flex", flexDirection:"row"}}>
+                {/*row numbers */}
+                    <div style = {{
+                        display: "grid",
+                        gridTemplateRows: `repeat(${rows}, 60px)`
+                    }}>
+                    
+                        {Array.from({length: rows}, (_,i) => (
+                            <div 
+                                key={i}
+                                style ={{
+                                    height: "60px",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    width: "60px",
+                                    fontWeight: "bold"
+                                }}>
+                                {rows-i}
+                            </div>
+                        ))}
+                    </div>
                 
+
             {/*this is the ship grid*/}
             <div
                 className="cargo-grid"
                 style={{
                     display: "grid",
-                    gridTemplateColumns: `repeat(${cols}, 45px)`,
+                    gridTemplateColumns: `repeat(${cols}, 60px)`,
                 }}
-
+                
             >
                 {[...grid].reverse().map((row,r) =>
                     row.map((cell,c) => {
@@ -67,7 +89,12 @@ export default function CargoGrid(
                         if (cell > 1) {
                             const info = containers[cell];
                             text = info?.name || "";
-                            bg = "#FFF5CC"; 
+                            bg = "#FFF5CC";
+
+                        }
+                        //if the cell is (7,0), label it PARK
+                        if (r === 0 && c === 0) {
+                            text = "PARK";
                         }
                         //red and green source and destination 
                         if (vSrc && vSrc[0] === r && vSrc[1] === c) {
@@ -84,14 +111,14 @@ export default function CargoGrid(
                                 key={`${r}-${c}`}
                                 className = "cell"
                                 style={{
-                                    width: "45px",
-                                    height: "45px",
+                                    width: "60px",
+                                    height: "60px",
                                     border,
                                     backgroundColor: bg,
                                     display: "flex",
                                     justifyContent: "center",
                                     alignItems: "center",
-                                    fontSize: "10px",
+                                    fontSize: "15px",
                                     color: "black",
                                     fontWeight: 
                                         (vSrc && vSrc[0] === r && vSrc[1] === c) ||
@@ -105,16 +132,8 @@ export default function CargoGrid(
                     })
                     )}
             </div>
+            </div>
         </div>
     );
 
-    // return (
-    //     <div className="grid-container">
-    //         {Array.from({ length: ROWS }).map((_, rowIndex) => 
-    //             Array.from({ length: COLS }).map((_, colIndex) => (
-    //                 <div key={`${rowIndex}-${colIndex}`} className="cell"></div>
-    //             ))
-    //         )}
-    //     </div>
-    // );
 }

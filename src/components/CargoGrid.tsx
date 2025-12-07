@@ -19,7 +19,7 @@ export default function CargoGrid(
     //correct coordinates after reversing the grid 
     const vSrc = moveSource ? [rows - 1 - moveSource[0], moveSource[1]] : null;
     const vDst = moveDest ? [rows - 1 - moveDest[0], moveDest[1]] : null;
-
+    const pad = (n) => String(n).padStart(2,"0");
 
     return (
         <div> 
@@ -33,7 +33,7 @@ export default function CargoGrid(
             }}>
                  <div></div>
                 {Array.from({length: cols}, (_,i) => (
-                    <div key = {i}> {i+1}</div>
+                    <div key = {i}> {pad(i+1)}</div>
                 ))}
             </div>
 
@@ -55,7 +55,7 @@ export default function CargoGrid(
                                     width: "60px",
                                     fontWeight: "bold"
                                 }}>
-                                {rows-i}
+                                {pad(rows-i)}
                             </div>
                         ))}
                     </div>
@@ -88,7 +88,7 @@ export default function CargoGrid(
                         //container
                         if (cell > 1) {
                             const info = containers[cell];
-                            text = info?.name || "";
+                            text = info?.name?.slice(0,3) || "";
                             bg = "#FFF5CC";
 
                         }

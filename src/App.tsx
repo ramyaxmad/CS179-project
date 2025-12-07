@@ -10,6 +10,7 @@ interface BackendResult {
   containers: { index: number; name:string; weight:number }[];
   moves: number;
   minutes: number;
+  minutes_per_move: number[];
   outbound_text: string;
 }
 
@@ -49,6 +50,15 @@ function buildMoveList(eachStep: [number,number][]) {
         </button>
       </div>
     );
+  }
+
+  function SaveLogEntry({logEntries, newEntry, setLogEntries}:
+    {logEntries: string; newEntry: string; setLogEntries:((prev: any) => any[]);}) {
+    const curr = new Date();
+    const time = logFileTimestamp(curr);
+
+    const eachLog = [...logEntries, `${time} ${newEntry}`];
+    setLogEntries(prev => [...prev, `${eachLog}`]);
   }
 
 function buildGridStates(states: number[][][], moves: any[]) {
@@ -94,6 +104,9 @@ function App() {
   const [logEntries, setLogEntries] = useState<string[]>([]);
   const [logStartTimestap, setLogStartTimestap] = useState<string>("");
   const [noteText, setNoteText] = useState("");
+
+  const pad = (n) => String(n).padStart(2,"0");
+  const park = (row,col) => row === 8 && col === 1;
   
   function saveNote() {
       if (noteText.trim() === "") return;
@@ -150,9 +163,37 @@ function App() {
     return () => window.removeEventListener("keydown", onEnter);
   }, [screen, uiStates.length]);
 
+  useEffect(() => {
+    if (screen !== "step") return;
+    if (!data) return;
+    if (stepIndex >= uiStates.length || stepIndex < 0) return;
+    const coord = uiStates[stepIndex];
+
+        const fromCoord = park(coord.from[0] + 1, coord.from[1] + 1)
+          ? "Park"
+          : `[${pad(coord.from[0] + 1)}, ${pad(coord.from[1] + 1)}] `;
+
+        const toCoord = park(coord.to[0] + 1, coord.to[1] + 1)
+          ? "Park"
+          : `[${pad(coord.to[0] + 1)}, ${pad(coord.to[1] + 1)}] `;
+        //log each move completion
+        const curr = new Date();
+        const time = logFileTimestamp(curr);
+        const minutesPerMove = data.minutes_per_move[stepIndex];
+        setLogEntries(prev => [...prev, `${time} 
+          Move ${stepIndex + 1} of ${uiStates.length}: Move from ${fromCoord} to ${toCoord}, ${minutesPerMove} minutes`]);
+  }, [stepIndex, screen]);
+
   //DOWNLOAD OUTBOUND
   useEffect(() => {
     if (screen === "done" && data?.outbound_text) {
+      //log when the outbound file is downloaded
+      const curr = new Date();
+      const time = logFileTimestamp(curr);
+      setLogEntries(prev => [...prev, `${time} 
+        Finished a Cycle. Manifest ${fileName}OUTBOUND.txt was written to downloads folder,
+        and a reminder pop-up to operator to send file was displayed.`]);
+
       const file = new Blob([data.outbound_text], {type: "text/plain"});
       const url = URL.createObjectURL(file);
 
@@ -182,15 +223,15 @@ function App() {
       return false;
     }
 
-    const rowFormat = /^\[\d{2},\d{2}\], \{\d{5}\}, .+$/;
-    //check if the rows are in the correct format 
-    for (let i = 0; i < rows.length; i++) {
-      const line = rows[i].trim();
-      if (!rowFormat.test(line)) {
-        alert("Error: File contains row(s) with invalid format");
-        return false;
-      }
-    }
+    // const rowFormat = /^\[\d{2},\d{2}\], \{\d{5}\}, .+$/;
+    // //check if the rows are in the correct format 
+    // for (let i = 0; i < rows.length; i++) {
+    //   const line = rows[i].trim();
+    //   if (!rowFormat.test(line)) {
+    //     alert("Error: File contains row(s) with invalid format");
+    //     return false;
+    //   }
+    // }
     return true;
   }
 
@@ -228,10 +269,26 @@ function App() {
 
     setData(result);
     const builtMoves = buildMoveList(result.steps);
+    
+    //log when the solution is found 
+    const currTime = new Date();
+    const logTime = logFileTimestamp(currTime);
+    setLogEntries(prev => [...prev, `${logTime} 
+      Balance solution found, it will require ${result.moves}
+       moves over ${result.minutes} minutes.`]);
+
     const ui = buildGridStates(result.states, builtMoves);
 
     setMoves(builtMoves);
     setUIStates(ui);
+
+    //logging when a file is uploaded 
+    const curr = new Date();
+    const time = logFileTimestamp(curr);
+    setLogEntries(prev => [...prev, `${time} 
+      Manifest ${file.name} is opened, there are  
+      ${result.containers.length - 2} containers on the ship.`]);
+
     setScreen("summary");
 
   } catch (err) {
@@ -261,7 +318,7 @@ function App() {
       {/*POWER ON PAGE */}
       {screen === "power" && (
         <>
-          <h1>Ship Balancing</h1>
+          <h1>Ship Balancing: Click START button</h1>
           <button style={{padding:"12px 25px", fontSize:"20px"}}
                   onClick={() => {
                     const curr = new Date();
@@ -271,7 +328,7 @@ function App() {
                     setLogEntries([`${logtime} Program was started.`])
                     setLogStartTimestap(logfile);
                     setScreen("upload")}}>
-            ON
+            START
           </button>
         </>
       )}
@@ -286,18 +343,11 @@ function App() {
             accept=".txt"
             onChange={(e) => e.target.files && uploadManifest(e.target.files[0])}
           />
+          <p></p>
           <NoteBox 
             noteText={noteText}
             setNoteText={setNoteText}
             saveNote={saveNote}/>
-        </>
-      )}
-
-      {/* LOADING */}
-      {screen === "loading" && (
-        <>
-          <h2>Computing solution...</h2>
-      
         </>
       )}
 
@@ -306,9 +356,14 @@ function App() {
         <>
           <h2>Solution has been found!</h2>
           <p>{fileName} has {data.containers.length - 2} containers</p>
-          <p>{data.moves} moves</p>
+          <p>{data.moves + 1} moves</p>
           <p>{data.minutes} minutes</p>
           <p>Hit ENTER when ready for first move</p>
+          
+          {/* <SaveLogEntry
+            logEntries = {logEntries}
+            newEntry={newEntry}
+            setLogEntries={setLogEntries}/> */}
           <NoteBox 
             noteText={noteText}
             setNoteText={setNoteText}
@@ -324,12 +379,24 @@ function App() {
 
           <div style = {{marginBottom: "20px"}}>
             {uiStates.slice(0,stepIndex+1).map((m, i) => (
-              <div>
+              <div key={i}>
                 <b>
                   {i+1} of {uiStates.length}:
                 </b>
                 {" "}
-                Move from [{m.from[0] + 1}, {m.from[1] + 1}] to [{m.to[0] + 1}, {m.to[1] + 1}]
+                <span style = {{fontSize: "24px"}}>
+                  Move from {park(m.from[0] + 1, m.from[1]+1)
+                  ? "Park"
+                  : `[${pad(m.from[0] + 1)}, ${pad(m.from[1] + 1)}] `}
+
+                {" "}to {" "}
+                  {park(m.to[0] + 1, m.to[1]+1)
+                  ? "Park"
+                  : `[${pad(m.to[0] + 1)}, ${pad(m.to[1] + 1)}]`}
+
+                
+                </span>
+
               </div>
             ))}
           </div>
@@ -361,12 +428,13 @@ function App() {
             noteText={noteText}
             setNoteText={setNoteText}
             saveNote={saveNote}/>
+          
           <button
             onClick={() => {
               const curr = new Date();
               const time = logFileTimestamp(curr);
 
-              const finalLog = [...logEntries, `${time}: Program was shut down`];
+              const finalLog = [...logEntries, `${time} Program was shut down`];
               const logText = finalLog.join("\n");
               const file = new Blob([logText], {type: "text/plain"});
               const url = URL.createObjectURL(file);
@@ -390,7 +458,7 @@ function App() {
               padding: "10px 25px",
               fontSize: "18px"
             }}>
-            OFF
+            END PROGRAM
           </button>
         </>
       )}
